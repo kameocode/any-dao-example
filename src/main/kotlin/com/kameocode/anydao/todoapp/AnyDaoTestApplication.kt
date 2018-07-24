@@ -8,6 +8,10 @@ import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
+import org.springframework.data.repository.CrudRepository
+import org.springframework.data.repository.NoRepositoryBean
+import org.springframework.stereotype.Component
+import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import javax.persistence.EntityManager
 
@@ -16,14 +20,16 @@ import javax.persistence.EntityManager
  */
 @SpringBootApplication
 open class AnyDaoTestApplication() : CommandLineRunner {
-
-    @Autowired
-    lateinit var anyDao: AnyDAO
-
     @Bean
     open fun anyDao(em: EntityManager): AnyDAO {
         return AnyDAO(em)
     }
+
+    @Autowired
+    lateinit var anyDao: AnyDAO
+    @Autowired
+    lateinit var userRepo: UserRepo
+
 
     @Transactional
     override fun run(vararg p: String?) {
@@ -49,9 +55,34 @@ open class AnyDaoTestApplication() : CommandLineRunner {
         println("AA " + resAll.size)
         println("AA " + res0.size)
         println("AA " + res1.size)
+
+        println("User repo count " + userRepo.count());
+        println("User repo query " + userRepo.someComplicatedQuery("email3"));
     }
 
+
 }
+
+/**Workaround to have CrudRepository and JPA implementation in one place */
+@Repository
+interface UserRepoInternal : CrudRepository<UserODB, Long>
+
+interface UserRepoCustom {
+    fun someComplicatedQuery(email: String): List<UserODB>
+}
+
+@Component
+@NoRepositoryBean
+open class UserRepoCustomImpl(var anyDAO: AnyDAO) : UserRepoCustom {
+    override fun someComplicatedQuery(email: String): List<UserODB> {
+        return anyDAO.all(UserODB::class) { it[UserODB::email] like email }
+    }
+}
+
+@Component
+open class UserRepo(uc: UserRepoCustom, ui: UserRepoInternal) :
+        UserRepoCustom by uc,
+        UserRepoInternal by ui
 
 
 fun main(args: Array<String>) {
